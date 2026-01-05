@@ -56,7 +56,7 @@ const MessageInput = ({selectedConvo} : {selectedConvo: Conversation}) => {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Soạn tin nhắn"
-          className="pr-20 h-9 bg-white border-border/50 focus:border-primary/50 transition=smooth resize-none"
+          className="pr-20 h-9 bg-transparent border-border/50 focus:border-primary/50 transition=smooth resize-none"
         >
           
         </Input>
