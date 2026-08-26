@@ -8,6 +8,7 @@ import { useThemeStore } from './stores/useThemeStore'
 import { useEffect } from 'react'
 import { useAuthStore } from './stores/useAuthStore'
 import { useSocketStore } from './stores/useSocketStore'
+import CallModal from './components/call/CallModal'
 
 function App() {
   const {isDark, setTheme} = useThemeStore();
@@ -29,6 +30,7 @@ function App() {
   return (
     <>
       <Toaster richColors/>
+      <CallModal />
       <BrowserRouter>
         <Routes>
           {/* public routes */}

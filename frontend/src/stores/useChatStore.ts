@@ -199,6 +199,20 @@ export const useChatStore = create<ChatState>()(
                 })
             },
 
+            // dùng khi nhận 1 conversation hoàn toàn mới qua socket (người khác
+            // vừa nhắn tin lần đầu) - KHÔNG set activeConversationId, chỉ thêm
+            // vào đầu danh sách sidebar để người dùng tự bấm vào xem
+            addNewConversation: (convo) => {
+                set((state) => {
+                    const exists = state.conversations.some((c) => c._id.toString() === convo._id.toString());
+                    if (exists) return state;
+
+                    return {
+                        conversations: [convo, ...state.conversations],
+                    }
+                })
+            },
+
             createConversation: async (type, name, memberIds) => {
                 try {
                     set({loading: true});

@@ -3,6 +3,7 @@ import http from 'http';
 import express from 'express';
 import { socketAuthMiddleware } from '../middlewares/socketMiddleWare.js';
 import { getUserConversationsForSocketIO } from '../controllers/conversationController.js';
+import { registerCallHandlers } from '../handlers/callHandler.js';
 
 const app = express();
 
@@ -24,7 +25,7 @@ io.on("connection", async (socket) => {
 
     console.log(`${user.displayName} online với ${socket.id}`);
 
-    onlineUsers.set(user._id, socket.id);
+    onlineUsers.set(user._id.toString(), socket.id);
 
     io.emit("online-users", Array.from(onlineUsers.keys()));
 
@@ -40,8 +41,10 @@ io.on("connection", async (socket) => {
 
     socket.join(user._id.toString());
 
+    registerCallHandlers(io, socket, onlineUsers);
+
     socket.on("disconnect", () => {
-        onlineUsers.delete(user._id);
+        onlineUsers.delete(user._id.toString()); 
         io.emit("online-users", Array.from(onlineUsers.keys()));
         console.log(`socket disconnected: ${socket.id}`)
     });

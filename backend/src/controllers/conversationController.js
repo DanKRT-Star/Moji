@@ -201,10 +201,27 @@ export const markAsSeen = async (req, res) => {
                 $set: {[`unreadCounts.${userId}`]: 0}
             },
             {new: true}
-        );
+        ).populate({
+            path: "participants._id",
+            select: "displayName avatarUrl"
+        });
+
+        const participants = (updated.participants || []).map((p) => ({
+            _id: p._id?._id ?? p._id,
+            displayName: p._id?.displayName,
+            avatarUrl: p._id?.avatarUrl ?? null,
+            joinedAt: p.joinedAt
+        }));
 
         io.to(conversationId).emit('read-message', {
-            conversation: updated,
+            conversation: {
+                _id: updated._id,
+                type: updated.type,
+                participants,
+                lastMessage: updated.lastMessage,
+                lastMessageAt: updated.lastMessageAt,
+                seenBy: updated.seenBy,
+            },
             lastMessage: {
                 _id: updated.lastMessage._id,
                 senderId: updated?.lastMessage.senderId,
