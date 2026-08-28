@@ -4,9 +4,31 @@ import { useSocketStore } from "./useSocketStore";
 import type { CallStoreState } from "@/types/store";
 import type { CallType, IncomingCall } from "@/types/call";
 
+// STUN free của Google - chỉ giúp tìm địa chỉ public, KHÔNG giúp truyền
+// được media nếu 1 trong 2 bên ở sau NAT đối xứng (4G, mạng công ty...).
+// Nếu console log ra "iceConnectionState: failed", đây chính là nguyên nhân
+// -> cần thêm TURN server thật (self-host coturn hoặc dịch vụ trả phí).
+// Dưới đây là TURN test free của Open Relay Project - CHỈ dùng để debug/demo,
+// không dùng cho production (giới hạn băng thông, không cam kết uptime).
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
+
 let peerConnection: RTCPeerConnection | null = null;
 let currentCallId: string | null = null;
 let remoteUserId: string | null = null;
@@ -39,11 +61,26 @@ const createPeerConnection = (
   };
 
   pc.ontrack = (event) => {
-    console.log("Nhận track từ đối phương:", event.streams[0]?.getTracks());
+    console.log(
+      "[call] nhận track từ đối phương:",
+      event.track.kind,
+      "streams:",
+      event.streams[0]?.getTracks().map((t) => t.kind)
+    );
     onRemoteStream(event.streams[0]);
   };
 
+  // log để debug - nếu iceConnectionState dừng ở "checking" rồi chuyển
+  // "failed" -> chắc chắn là do thiếu TURN server (xem comment ICE_SERVERS)
+  pc.oniceconnectionstatechange = () => {
+    console.log("[call] iceConnectionState:", pc.iceConnectionState);
+    if (pc.iceConnectionState === "failed") {
+      toast.error("Không thể kết nối trực tiếp - có thể cần TURN server (xem console)");
+    }
+  };
+
   pc.onconnectionstatechange = () => {
+    console.log("[call] connectionState:", pc.connectionState);
     if (["failed", "closed"].includes(pc.connectionState)) {
       useCallStore.getState()._cleanup();
     }
@@ -155,7 +192,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       isCameraOff: false,
     });
   },
-  
+
   _handleRinging: ({ callId }) => {
     currentCallId = callId;
   },

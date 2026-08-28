@@ -47,7 +47,19 @@ const CallModal = () => {
   }, [localStream]);
 
   useEffect(() => {
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+    const el = remoteVideoRef.current;
+    if (!el) return;
+
+    el.srcObject = remoteStream;
+
+    if (remoteStream) {
+      // thuộc tính autoPlay đôi khi không đủ khi srcObject được gán bằng JS
+      // sau khi element đã mount - gọi .play() tường minh + log nếu bị chặn
+      // (thường do trình duyệt chặn autoplay có âm thanh)
+      el.play().catch((err) => {
+        console.error("[call] Không thể tự động phát audio/video từ đối phương:", err);
+      });
+    }
   }, [remoteStream]);
 
   const isVideoCall = callType === "video";
@@ -69,18 +81,20 @@ const CallModal = () => {
         </DialogDescription>
 
         <div className="relative flex flex-col items-center justify-between bg-gradient-purple min-h-[420px]">
-          {callState === "ongoing" && remoteStream && (
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className={
-                isVideoCall
-                  ? "absolute inset-0 h-full w-full object-cover"
-                  : "hidden"
-              }
-            />
-          )}
+          {/* remote media - LUÔN render (không điều kiện theo remoteStream) để
+              ref luôn tồn tại, srcObject được gán/gỡ qua effect ở trên.
+              Với audio call: không dùng display:none (có thể ảnh hưởng phát
+              audio ở 1 số trình duyệt) mà thu nhỏ về 1px + ẩn khỏi luồng layout */}
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className={
+              callState === "ongoing" && isVideoCall
+                ? "absolute inset-0 h-full w-full object-cover"
+                : "absolute w-px h-px opacity-0 pointer-events-none"
+            }
+          />
 
           {callState === "ongoing" && isVideoCall && localStream && !isCameraOff && (
             <video
