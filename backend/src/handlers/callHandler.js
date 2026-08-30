@@ -1,13 +1,12 @@
 import Call from "../models/Call.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
+import { updateConversationAfterCreateMessage, emitNewMessage } from "../utils/messageHelper.js";
 
-// Thời gian chờ trước khi tự động huỷ cuộc gọi nếu không ai bắt máy (ms)
 const RINGING_TIMEOUT = 45000;
 
-// Lưu trạng thái các cuộc gọi đang diễn ra (in-memory, dùng chung cho mọi socket)
-// key: callId -> { callerId, calleeId, conversationId, type, status }
 const activeCalls = new Map();
 
-// Map userId -> callId, để biết user hiện có đang trong 1 cuộc gọi khác không
 const userCallMap = new Map();
 
 const cleanupCall = (callId, call) => {
@@ -15,6 +14,39 @@ const cleanupCall = (callId, call) => {
     if (call) {
         userCallMap.delete(call.callerId);
         userCallMap.delete(call.calleeId);
+    }
+};
+
+const createCallMessage = async (io, call, callId, status, duration = 0) => {
+    try {
+        const conversation = await Conversation.findById(call.conversationId);
+        if (!conversation) return;
+
+        const message = await Message.create({
+            conversationId: call.conversationId,
+            senderId: call.callerId,
+            type: "call",
+            call: {
+                callId,
+                callerId: call.callerId,
+                calleeId: call.calleeId,
+                callType: call.type,
+                status,
+                duration
+            }
+        });
+
+        updateConversationAfterCreateMessage(conversation, message, call.callerId);
+        await conversation.save();
+
+        await conversation.populate({
+            path: "participants._id",
+            select: "displayName avatarUrl"
+        });
+
+        emitNewMessage(io, conversation, message);
+    } catch (error) {
+        console.error("Lỗi khi tạo message cho cuộc gọi", error);
     }
 };
 
@@ -84,6 +116,8 @@ export const registerCallHandlers = (io, socket, onlineUsers) => {
                     await Call.findByIdAndUpdate(callId, { status: "missed" });
                     io.to(current.callerId).emit("call:timeout", { callId });
                     io.to(current.calleeId).emit("call:timeout", { callId });
+
+                    await createCallMessage(io, current, callId, "missed"); 
                 }
             }, RINGING_TIMEOUT);
         } catch (error) {
@@ -122,6 +156,8 @@ export const registerCallHandlers = (io, socket, onlineUsers) => {
             await Call.findByIdAndUpdate(callId, { status: "rejected" });
 
             io.to(call.callerId).emit("call:rejected", { callId });
+
+            await createCallMessage(io, call, callId, "rejected");   // <-- THÊM
         } catch (error) {
             console.error("Lỗi khi gọi call:reject", error);
         }
@@ -137,6 +173,8 @@ export const registerCallHandlers = (io, socket, onlineUsers) => {
             await Call.findByIdAndUpdate(callId, { status: "cancelled" });
 
             io.to(call.calleeId).emit("call:cancelled", { callId });
+
+            await createCallMessage(io, call, callId, "cancelled");
         } catch (error) {
             console.error("Lỗi khi gọi call:cancel", error);
         }
@@ -159,6 +197,8 @@ export const registerCallHandlers = (io, socket, onlineUsers) => {
 
             const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
             io.to(otherUserId).emit("call:ended", { callId });
+
+            await createCallMessage(io, call, callId, "completed", updateData.duration ?? 0);   // <-- THÊM
         } catch (error) {
             console.error("Lỗi khi gọi call:end", error);
         }
@@ -175,6 +215,10 @@ export const registerCallHandlers = (io, socket, onlineUsers) => {
 
     socket.on("call:ice-candidate", ({ callId, to, candidate }) => {
         io.to(to).emit("call:ice-candidate", { callId, from: userId, candidate });
+    });
+
+    socket.on("call:video-toggle", ({ callId, to, enabled }) => {
+        io.to(to).emit("call:video-toggle", { callId, from: userId, enabled });
     });
 
     // ---- 7. User rớt mạng giữa cuộc gọi -> tự động kết thúc ----
@@ -201,8 +245,11 @@ export const registerCallHandlers = (io, socket, onlineUsers) => {
 
             const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
             io.to(otherUserId).emit("call:ended", { callId });
+
+            await createCallMessage(io, call, callId, status, updateData.duration ?? 0);   // <-- THÊM
         } catch (error) {
             console.error("Lỗi khi xử lý disconnect trong callHandlers", error);
         }
     });
 };
+

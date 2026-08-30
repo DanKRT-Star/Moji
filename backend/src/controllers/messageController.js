@@ -2,17 +2,18 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
 import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
+import { uploadImageFromBuffer } from "../middlewares/uploadMiddleWare.js";
 
 export const sendDirectMessage = async (req, res) => {
 
   try {
-    const { recipientId, content, conversationId } = req.body;
+    const { recipientId, content, conversationId, imgUrl } = req.body;
     const senderId = req.user._id;
 
     let conversation;
     let isNewConversation = false;
 
-    if (!content) {
+    if (!content && !imgUrl) {
       return res.status(400).json({ message: "Thiếu nội dung" });
     }
 
@@ -28,7 +29,7 @@ export const sendDirectMessage = async (req, res) => {
           { _id: recipientId, joinedAt: new Date() }
         ],
         lastMessageAt: new Date(),
-        unreadCounts: new Map()
+        unreadCounts: new Map(),
       });
       isNewConversation = true;
     }
@@ -37,6 +38,7 @@ export const sendDirectMessage = async (req, res) => {
       conversationId: conversation._id,
       senderId,
       content,
+      imgUrl
     });
 
     updateConversationAfterCreateMessage(conversation, message, senderId);
@@ -71,18 +73,19 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { conversationId, content } = req.body;
+    const { conversationId, content, imgUrl } = req.body;
     const senderId = req.user._id;
     const conversation = req.conversation;
 
-    if (!content) {
-      return res.status(400).json("Thiếu nội dung");
+    if (!content && !imgUrl) {
+      return res.status(400).json({ message: "Thiếu nội dung" });
     }
 
     const message = await Message.create({
       conversationId,
       senderId,
       content,
+      imgUrl
     });
 
     updateConversationAfterCreateMessage(conversation, message, senderId);
@@ -103,4 +106,24 @@ export const sendGroupMessage = async (req, res) => {
     console.error("Lỗi xảy ra khi gửi tin nhắn nhóm", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
+};
+
+export const uploadMessageImage = async (req, res) => {
+    try {
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ message: "Chưa có file nào được upload" });
+        }
+
+        const result = await uploadImageFromBuffer(file.buffer, {
+            folder: "moji_chat/messages",
+            transformation: [{ width: 1600, crop: "limit" }],
+        });
+
+        return res.status(200).json({ imgUrl: result.secure_url });
+    } catch (error) {
+        console.error("Lỗi khi upload ảnh tin nhắn:", error);
+        return res.status(500).json({ message: "Upload thất bại" });
+    }
 };

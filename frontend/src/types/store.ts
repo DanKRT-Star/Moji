@@ -112,6 +112,7 @@ export interface CallStoreState {
     incomingCall: IncomingCall | null;
     otherUser: CallerInfo | null;
     callType: CallType | null;
+    remoteVideoEnabled: boolean;
     localStream: MediaStream | null;
     remoteStream: MediaStream | null;
     isMuted: boolean;
@@ -141,4 +142,5 @@ export interface CallStoreState {
     _handleBusy: () => void;
     _handleUnavailable: () => void;
     _handleCallError: (payload: { message: string }) => void;
+    _handleVideoToggle: (payload: { enabled: boolean }) => void;
 }

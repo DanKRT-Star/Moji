@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useSocketStore } from "./useSocketStore";
 import type { CallStoreState } from "@/types/store";
 import type { CallType, IncomingCall } from "@/types/call";
+import { playRingback, stopRingback, playRingtone, stopRingtone } from "@/lib/sounds";
 
 // STUN free của Google - chỉ giúp tìm địa chỉ public, KHÔNG giúp truyền
 // được media nếu 1 trong 2 bên ở sau NAT đối xứng (4G, mạng công ty...).
@@ -61,26 +62,14 @@ const createPeerConnection = (
   };
 
   pc.ontrack = (event) => {
-    console.log(
-      "[call] nhận track từ đối phương:",
-      event.track.kind,
-      "streams:",
-      event.streams[0]?.getTracks().map((t) => t.kind)
-    );
     onRemoteStream(event.streams[0]);
-  };
 
-  // log để debug - nếu iceConnectionState dừng ở "checking" rồi chuyển
-  // "failed" -> chắc chắn là do thiếu TURN server (xem comment ICE_SERVERS)
-  pc.oniceconnectionstatechange = () => {
-    console.log("[call] iceConnectionState:", pc.iceConnectionState);
-    if (pc.iceConnectionState === "failed") {
-      toast.error("Không thể kết nối trực tiếp - có thể cần TURN server (xem console)");
+    if (event.track.kind === "video") {
+      useCallStore.setState({ remoteVideoEnabled: true });
     }
-  };
+};
 
   pc.onconnectionstatechange = () => {
-    console.log("[call] connectionState:", pc.connectionState);
     if (["failed", "closed"].includes(pc.connectionState)) {
       useCallStore.getState()._cleanup();
     }
@@ -99,6 +88,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   remoteStream: null,
   isMuted: false,
   isCameraOff: false,
+  remoteVideoEnabled: false,
   error: null,
 
   // ---- gọi đi ----
@@ -109,6 +99,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     remoteUserId = calleeId;
     set({ callState: "outgoing", callType: type, otherUser: calleeInfo, error: null });
     socket.emit("call:invite", { conversationId, calleeId, type });
+    playRingback(); 
   },
 
   cancelCall: () => {
@@ -123,6 +114,8 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     const { incomingCall } = get();
     const socket = getSocket();
     if (!incomingCall || !socket) return;
+
+    stopRingback();
 
     try {
       currentCallId = incomingCall.callId;
@@ -168,11 +161,27 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   toggleCamera: () => {
     const { localStream, isCameraOff } = get();
-    localStream?.getVideoTracks().forEach((track) => (track.enabled = isCameraOff));
+    const newEnabled = isCameraOff; // giá trị track.enabled SẮP được set (đảo ngược trạng thái hiện tại)
+
+    localStream?.getVideoTracks().forEach((track) => (track.enabled = newEnabled));
     set({ isCameraOff: !isCameraOff });
+
+    // báo cho đối phương biết mình vừa bật/tắt cam - KHÔNG dựa vào
+    // track mute/unmute vì set track.enabled=false không làm track bên
+    // nhận bắn sự kiện đó (theo spec, chỉ gửi black frame, không mute)
+    if (currentCallId && remoteUserId) {
+      getSocket()?.emit("call:video-toggle", {
+        callId: currentCallId,
+        to: remoteUserId,
+        enabled: newEnabled,
+      });
+    }
   },
 
   _cleanup: () => {
+    stopRingback();
+    stopRingtone()
+
     peerConnection?.close();
     peerConnection = null;
     currentCallId = null;
@@ -187,6 +196,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       otherUser: null,
       callType: null,
       localStream: null,
+      remoteVideoEnabled: false,
       remoteStream: null,
       isMuted: false,
       isCameraOff: false,
@@ -200,11 +210,14 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   _handleIncoming: (payload: IncomingCall) => {
     currentCallId = payload.callId;
     set({ incomingCall: payload, otherUser: payload.caller, callType: payload.type, callState: "incoming" });
+    playRingtone();
   },
 
   _handleAccepted: async () => {
     const socket = getSocket();
     if (!socket || !remoteUserId || !currentCallId) return;
+
+    stopRingtone();
 
     try {
       const stream = await getLocalMedia(get().callType);
@@ -290,4 +303,8 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     toast.error(message);
     get()._cleanup();
   },
+
+  _handleVideoToggle: ({ enabled }) => {
+    set({ remoteVideoEnabled: enabled });
+},
 }));

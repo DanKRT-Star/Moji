@@ -48,9 +48,20 @@ export interface Message {
   _id: string;
   conversationId: string;
   senderId: string;
+  type: "text" | "call";
   content: string | null;
   imgUrl?: string | null;
+  call?: CallMessageInfo | null;
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
+}
+
+export interface CallMessageInfo {
+  callId: string;
+  callerId: string;
+  calleeId: string;
+  callType: "audio" | "video";
+  status: "completed" | "missed" | "rejected" | "cancelled";
+  duration: number;
 }

@@ -8,6 +8,13 @@ export const upload = multer({
     },
 })
 
+export const uploadChatImage = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 1024 * 1024 * 5,
+    },
+})
+
 export const uploadImageFromBuffer = (buffer, options) => {
     return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream({

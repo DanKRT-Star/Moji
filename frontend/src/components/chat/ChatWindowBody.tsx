@@ -72,7 +72,7 @@ const ChatWindowBody = () => {
         container.scrollTop = scrollTop;
       });
     }
-  }, [messages.length]);
+  }, [messages.length, key]);
 
   if (!activeConversationId) {
     return <ChatWelcomeSceen/>

@@ -1,3 +1,5 @@
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./config/swagger.js";
 import express from "express";
 import dotenv from "dotenv";
 import { connectDB } from "./libs/db.js";
@@ -20,6 +22,9 @@ const PORT = process.env.PORT || 5001;
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({origin: process.env.CLIENT_URL, credentials: true}))
+
+//swagger docs - public, không cần auth
+app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 //cloudinary configuration
 cloudinary.config({ 
