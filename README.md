@@ -5,8 +5,8 @@ A full-stack real-time chat application with WebRTC voice/video calling, built t
 ## Live Demo
 
 - **App:** https://moji-lake.vercel.app
-- **API:** https://<your-render-app>.onrender.com
-- **API Docs (Swagger):** https://<your-render-app>.onrender.com/swagger
+- **API:** https://moji-backend-7c0v.onrender.com
+- **API Docs (Swagger):** https://moji-backend-7c0v.onrender.com/swagger
 
 > Note: the backend is hosted on a free tier and may take 30–50 seconds to wake up on the first request after a period of inactivity.
 
